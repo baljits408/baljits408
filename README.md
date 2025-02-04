@@ -1,94 +1,87 @@
-Ip6InReceives                    107795247
-Ip6InHdrErrors                    13
-Ip6InTooBigErrors                 0
-Ip6InNoRoutes                     0
-Ip6InAddrErrors                   0
-Ip6InUnknownProtos                0
-Ip6InTruncatedPkts                0
-Ip6InDiscards                     0
-Ip6InDelivers                     106562106
-Ip6OutForwDatagrams               852
-Ip6OutRequests                    106362740
-Ip6OutDiscards                    8
-Ip6OutNoRoutes                    222
-Ip6ReasmTimeout                   0
-Ip6ReasmReqds                     0
-Ip6ReasmOKs                       0
-Ip6ReasmFails                     0
-Ip6FragOKs                        0
-Ip6FragFails                      0
-Ip6FragCreates                    0
-Ip6InMcastPkts                    1271222
-Ip6OutMcastPkts                   218
-Ip6InOctets                       20710203098
-Ip6OutOctets                      17738992420
-Ip6InMcastOctets                  177916937
-Ip6OutMcastOctets                 16376
-Ip6InBcastOctets                  0
-Ip6OutBcastOctets                 0
-Ip6InNoECTPkts                    109368911
-Ip6InECT1Pkts                     0
-Ip6InECT0Pkts                     0
-Ip6InCEPkts                       0
-Icmp6InMsgs                       175895
-Icmp6InErrors                     0
-Icmp6OutMsgs                      144780
-Icmp6OutErrors                    0
-Icmp6InCsumErrors                 0
-Icmp6InDestUnreachs               40280
-Icmp6InPktTooBigs                 0
-Icmp6InTimeExcds                  0
-Icmp6InParmProblems               0
-Icmp6InEchos                      0
-Icmp6InEchoReplies                80331
-Icmp6InGroupMembQueries           38662
-Icmp6InGroupMembResponses         12
-Icmp6InGroupMembReductions        0
-Icmp6InRouterSolicits             376
-Icmp6InRouterAdvertisements       0
-Icmp6InNeighborSolicits           7838
-Icmp6InNeighborAdvertisements     8396
-Icmp6InRedirects                  0
-Icmp6InMLDv2Reports               0
-Icmp6OutDestUnreachs              40277
-Icmp6OutPktTooBigs                0
-Icmp6OutTimeExcds                 0
-Icmp6OutParmProblems              0
-Icmp6OutEchos                     88252
-Icmp6OutEchoReplies               0
-Icmp6OutGroupMembQueries          0
-Icmp6OutGroupMembResponses        12
-Icmp6OutGroupMembReductions       0
-Icmp6OutRouterSolicits            0
-Icmp6OutRouterAdvertisements      0
-Icmp6OutNeighborSolicits          8395
-Icmp6OutNeighborAdvertisements    7838
-Icmp6OutRedirects                 0
-Icmp6OutMLDv2Reports              6
-Icmp6InType1                      40280
-Icmp6InType129                    80331
-Icmp6InType130                    38662
-Icmp6InType131                    12
-Icmp6InType133                    376
-Icmp6InType135                    7838
-Icmp6InType136                    8396
-Icmp6OutType1                     40277
-Icmp6OutType128                   88252
-Icmp6OutType131                   12
-Icmp6OutType135                   8395
-Icmp6OutType136                   7838
-Icmp6OutType143                   6
-Udp6InDatagrams                   1746498
-Udp6NoPorts                       40277
-Udp6InErrors                      0
-Udp6OutDatagrams                  1786775
-Udp6RcvbufErrors                  0
-Udp6SndbufErrors                  0
-Udp6InCsumErrors                  0
-UdpLite6InDatagrams               0
-UdpLite6NoPorts                   0
-UdpLite6InErrors                  0
-UdpLite6OutDatagrams              0
-UdpLite6RcvbufErrors              0
-UdpLite6SndbufErrors              0
-UdpLite6InCsumErrors              0
+'/proc/net/snmp',
+    ]
+
+    PROC6 = [
+        '/proc/net/snmp6'
+    ]
+    GAUGES = [
+        'Forwarding',
+        'DefaultTTL',
+    ]
+
+    DEFAULT_METRICS = [
+        'InAddrErrors', 'InDelivers', 'InDiscards', 'InHdrErrors',
+        'InReceives', 'InUnknownProtos', 'OutDiscards', 'OutNoRoutes',
+        'OutRequests',
+        'Ip6InAddrErrors', 'Ip6InDelivers', 'Ip6InDiscards',
+        'Ip6InHdrErrors', 'Ip6InReceives', 'Ip6InUnknownProtos',
+        'Ip6OutDiscards', 'Ip6OutNoRoutes', 'Ip6OutRequests'
+    ]
+    def process_config(self):
+        super(IPCollector, self).process_config()
+        if self.config['allowed_names'] is None:
+@@ -56,30 +69,38 @@ def get_default_config(self):
+        config = super(IPCollector, self).get_default_config()
+        config.update({
+            'path': 'ip',
+            'allowed_names': 'InAddrErrors, InDelivers, InDiscards, ' +
+            'InHdrErrors, InReceives, InUnknownProtos, OutDiscards, ' +
+            'OutNoRoutes, OutRequests'
+            'allowed_names': ','.join(self.DEFAULT_METRICS)
+        })
+        return config
+
+    def open_file(self, filepath):
+        if not os.access(filepath, os.R_OK):
+            self.log.error('Permission to access %s denied', filepath)
+            return
+        fp = open(filepath)
+        if not fp:
+            self.log.error('Failed to open %s', filepath)
+            return
+        return fp
+    def collect(self):
+        self.collect_ipv4()
+        self.collect_ipv6()
+    def collect_ipv4(self):
+        metrics = {}
+
+        for filepath in self.PROC:
+            if not os.access(filepath, os.R_OK):
+                self.log.error('Permission to access %s denied', filepath)
+            file = self.open_file(filepath)
+            if not file:
+                continue
+
+            header = ''
+            data = ''
+
+            # Seek the file for the lines which start with Ip
+            file = open(filepath)
+            if not file:
+                self.log.error('Failed to open %s', filepath)
+                continue
+            while True:
+                line = file.readline()
+
+@@ -118,3 +139,25 @@ def collect(self):
+                self.publish_gauge(metric_name, value, 0)
+            else:
+                self.publish_counter(metric_name, value, 0)
+    def collect_ipv6(self):
+        metrics = {}
+        for filepath in self.PROC6:
+            fp = self.open_file(filepath)
+            for line in fp.readlines():
+                key, value = line.split()
+                metrics[key] = long(value)
+            fp.close()
+        for metric, value in metrics.iteritems():
+            if (len(self.config['allowed_names']) > 0
+                    and metric not in self.config['allowed_names']):
+                continue
+            # Publish the metric
+            if metric in self.GAUGES:
+                self.publish_gauge(metric, value, 0)
+            else:
+                self.publish_counter(metric, value, 0)
