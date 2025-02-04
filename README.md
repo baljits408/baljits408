@@ -1,79 +1,222 @@
-RxConnect
-An Android Library to POST JSON and normal GET/POST using Rxjava.
+          'percore':  'Collect metrics per cpu core or just total',
+            'simple':   'only return aggregate CPU% metric',
+            'normalize': 'for cpu totals, divide by the number of CPUs',
+            'derivative': 'use derivative values for metrics',
+        })
+        return config_help
 
-Add this line to your dependencies in your apps build.gradle
+@@ -58,6 +59,7 @@ def get_default_config(self):
+            'xenfix':   None,
+            'simple':   'False',
+            'normalize': 'False',
+            'derivative': 'True',
+        })
+        return config
 
-compile 'mohitbadwal.rxconnect:rxconnect:1.0.42'
+@@ -89,6 +91,10 @@ def cpu_delta_time(interval):
+                post_check[i] -= pre_check[i]
+            return post_check
 
-Usage
-Make new RxConnect object
+        use_derivative = str_to_bool(self.config['derivative'])
+        use_normalization = str_to_bool(self.config['normalize'])
+        metrics = {}
+        if os.access(self.PROC, os.R_OK):
 
-RxConnect rxConnect=new RxConnect(context);
-Set Caching
+            # If simple only return aggregate CPU% metric
+@@ -143,26 +149,24 @@ def cpu_delta_time(interval):
+            # Close File
+            file.close()
 
-//by default caching is enabled for better performance
-rxConnect.setCachingEnabled(false);
-//call this method before setting parameters if you don't want caching
-Set Add To RequestQueue
+            metrics = {'cpu_count': ncpus}
+            metrics['cpu_count'] = ncpus
 
-//by default Requests are added to queue for better performance , helps when device goes offline
-rxConnect.setAddToQueue(false);
-//call this method before setting parameters if you don't want requests being added to queue
-Set Parameter to send
+            for cpu in results.keys():
+                stats = results[cpu]
+                for s in stats.keys():
+                    # Get Metric Name
+                    metric_name = '.'.join([cpu, s])
+                    # Get actual data
+                    if ((str_to_bool(self.config['normalize']) and
+                         cpu == 'total' and
+                         ncpus > 0)):
+                    div = 1
+                    if use_normalization and cpu == 'total' and ncpus > 0:
+                        div = ncpus
+                    if use_derivative:
+                        metrics[metric_name] = self.derivative(
+                            metric_name,
+                            long(stats[s]),
+                            self.MAX_VALUES[s]) / ncpus
+                            self.MAX_VALUES[s]) / div
+                    else:
+                        metrics[metric_name] = self.derivative(
+                            metric_name,
+                            long(stats[s]),
+                            self.MAX_VALUES[s])
+                        metrics[metric_name] = long(stats[s]) / div
 
-rxConnect.setParam("phone","9999999999");
-// setParam(keys,values)
-rxConnect.setParam("password","enteredpassword");
-Use execute method to perform operation
+            # Check for a bug in xen where the idle time is doubled for guest
+            # See https://bugzilla.redhat.com/show_bug.cgi?id=624756
+@@ -182,13 +186,6 @@ def cpu_delta_time(interval):
+                else:
+                    self.config['xenfix'] = False
 
-      //all override methods run on ui thread
-      //use RxConnect.GET for GET
-      //use RxConnect.POST for POST
-      //use RxConnect.JSON_POST for POST JSON data
-        rxConnect.execute(yoururl,RxConnect.GET, new RxConnect.RxResultHelper() {
-            @Override
-            public void onResult(String result) {
-              //do something on result
-            }
+            # Publish Metric Derivative
+            for metric_name in metrics.keys():
+                self.publish(metric_name,
+                             metrics[metric_name],
+                             precision=2)
+            return True
+        else:
+            if not psutil:
+                self.log.error('Unable to import psutil')
+@@ -198,69 +195,70 @@ def cpu_delta_time(interval):
+            cpu_time = psutil.cpu_times(True)
+            cpu_count = len(cpu_time)
+            total_time = psutil.cpu_times()
+            for i in range(0, len(cpu_time)):
+                metric_name = 'cpu' + str(i)
+                self.publish(
+                    metric_name + '.user',
+                    self.derivative(metric_name + '.user',
+                                    cpu_time[i].user,
+                                    self.MAX_VALUES['user']),
+                    precision=2)
+                if hasattr(cpu_time[i], 'nice'):
+                    self.publish(
+                        metric_name + '.nice',
+                        self.derivative(metric_name + '.nice',
+                                        cpu_time[i].nice,
+                                        self.MAX_VALUES['nice']),
+                        precision=2)
+                self.publish(
+                    metric_name + '.system',
+                    self.derivative(metric_name + '.system',
+                                    cpu_time[i].system,
+                                    self.MAX_VALUES['system']),
+                    precision=2)
+                self.publish(
+                    metric_name + '.idle',
+                    self.derivative(metric_name + '.idle',
+                                    cpu_time[i].idle,
+                                    self.MAX_VALUES['idle']),
+                    precision=2)
+            metric_name = 'total'
+            self.publish(
+                metric_name + '.user',
+                self.derivative(metric_name + '.user',
+                                total_time.user,
+                                self.MAX_VALUES['user']) / cpu_count,
+                precision=2)
+            if hasattr(total_time, 'nice'):
+                self.publish(
+                    metric_name + '.nice',
+                    self.derivative(metric_name + '.nice',
+                                    total_time.nice,
+                                    self.MAX_VALUES['nice']) / cpu_count,
+                    precision=2)
+            self.publish(
+                metric_name + '.system',
+                self.derivative(metric_name + '.system',
+                                total_time.system,
+                                self.MAX_VALUES['system']) / cpu_count,
+                precision=2)
+            self.publish(
+                metric_name + '.idle',
+                self.derivative(metric_name + '.idle',
+                                total_time.idle,
+                                self.MAX_VALUES['idle']) / cpu_count,
+                precision=2)
+            self.publish('cpu_count', psutil.cpu_count())
+            return True
+        return None
+            metrics['cpu_count'] = cpu_count
+            if str_to_bool(self.config['percore']):
+                for i in range(0, len(cpu_time)):
+                    cpu = 'cpu' + str(i)
+                    if use_derivative:
+                        metrics[cpu + '.user'] = self.derivative(
+                            cpu + '.user',
+                            long(cpu_time[i].user),
+                            self.MAX_VALUES['user'])
+                        metrics[cpu + '.system'] = self.derivative(
+                            cpu + '.system',
+                            long(cpu_time[i].system),
+                            self.MAX_VALUES['system'])
+                        metrics[cpu + '.idle'] = self.derivative(
+                            cpu + '.idle',
+                            long(cpu_time[i].idle),
+                            self.MAX_VALUES['idle'])
+                        if hasattr(cpu_time[i], 'nice'):
+                            metrics[cpu + '.nice'] = self.derivative(
+                                cpu + '.nice',
+                                long(cpu_time[i].nice),
+                                self.MAX_VALUES['nice'])
+                    else:
+                        metrics[cpu + '.user'] = long(cpu_time[i].user)
+                        metrics[cpu + '.system'] = long(cpu_time[i].system)
+                        metrics[cpu + '.idle'] = long(cpu_time[i].idle)
+                        if hasattr(cpu_time[i], 'nice'):
+                            metrics[cpu + '.nice'] = long(cpu_time[i].nice)
+            div = 1
+            if use_normalization and cpu_count > 0:
+                div = cpu_count
+            if use_derivative:
+                metrics['total.user'] = self.derivative(
+                    'total.user',
+                    long(total_time.user),
+                    self.MAX_VALUES['user']) / div
+                metrics['total.system'] = self.derivative(
+                    'total.system',
+                    long(total_time.system),
+                    self.MAX_VALUES['system']) / div
+                metrics['total.idle'] = self.derivative(
+                    'total.idle',
+                    long(total_time.idle),
+                    self.MAX_VALUES['idle']) / div
+                if hasattr(total_time, 'nice'):
+                    metrics['total.nice'] = self.derivative(
+                        'total.nice',
+                        long(total_time.nice),
+                        self.MAX_VALUES['nice']) / div
+            else:
+                metrics['total.user'] = long(total_time.user) / div
+                metrics['total.system'] = long(total_time.system) / div
+                metrics['total.idle'] = long(total_time.idle) / div
+                if hasattr(total_time, 'nice'):
+                    metrics['total.nice'] = long(total_time.nice) / div
+        # Publish Metric
+        for metric_name in metrics.keys():
+            self.publish(metric_name,
+                         metrics[metric_name],
+                         precision=2)
+        return True
+‎src/diamond/collector.py
++3
+-2
+Original file line number	Diff line number	Diff line change
+@@ -5,6 +5,7 @@
+"""
 
-            @Override
-            public void onNoResult() {
-                //do something
-            }
+import os
+import platform
+import socket
+import platform
+import logging
+@@ -91,14 +92,14 @@ def get_hostname(config, method=None):
+        return hostname
 
-            @Override
-            public void onError(Throwable throwable) {
-               //do somenthing on error
-            }
+    if method == 'uname_short':
+        hostname = os.uname()[1].split('.')[0]
+        hostname = platform.uname()[1].split('.')[0]
+        get_hostname.cached_results[method] = hostname
+        if hostname == '':
+            raise DiamondException('Hostname is empty?!')
+        return hostname
 
-        });
-About
-An Android Library to POST JSON and normal GET/POST using Rxjava. It's a networking library.
-
-Topics
-post-json network rxjava android-library requests
-Resources
- Readme
- Activity
-Stars
- 3 stars
-Watchers
- 1 watching
-Forks
- 0 forks
-Report repository
-Releases 1
-Added Caching to RxConnect
-Latest
-on May 23, 2016
-Packages
-No packages published
-Languages
-Java
-100.0%
-Footer
-© 2025 GitHub, Inc.
-Footer navigation
-Terms
-Privacy
-Security
+    if method == 'uname_rev':
+        hostname = os.uname()[1].split('.')
+        hostname = platform.uname()[1].split('.')
+        hostname.reverse()
+        hostname = '.'.join(hostname)
+        get_hostname.cached_results[method] = hostname
