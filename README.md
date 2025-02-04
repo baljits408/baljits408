@@ -1,103 +1,94 @@
-def test_should_open_proc_net_snmp(self, publish_mock, open_mock):
-        IPCollector.PROC = ['/proc/net/snmp']
-        open_mock.return_value = StringIO('')
-        self.collector.collect()
-        self.collector.collect_ipv4()
-        open_mock.assert_called_once_with('/proc/net/snmp')
-
-        open_mock.reset_mock()
-        IPCollector.PROC6 = ['/proc/net/snmp6']
-        open_mock.return_value = StringIO('')
-        self.collector.collect_ipv6()
-        open_mock.assert_called_once_with('/proc/net/snmp6')
-    @patch('os.access', Mock(return_value=True))
-    @patch('__builtin__.open')
-    @patch('diamond.collector.Collector.publish')
-    def test_should_work_with_synthetic_data(self, publish_mock, open_mock):
-        IPCollector.PROC = ['/proc/net/snmp']
-        self.setUp(['A', 'C'])
-        open_mock.return_value = StringIO('''
-        IPCollector.PROC6 = ['/proc/net/snmp6']
-        self.setUp(['A', 'C', 'A6', 'C6'])
-        open_mock.side_effect = [StringIO('''
-Ip: A B C
-Ip: 0 0 0
-'''.strip())
-'''.strip()), StringIO('''
-A6    0
-B6    0
-C6    0
-'''.strip())]
-
-        self.collector.collect()
-
-        open_mock.return_value = StringIO('''
-        open_mock.side_effect = [StringIO('''
-Ip: A B C
-Ip: 0 1 2
-'''.strip())
-'''.strip()), StringIO('''
-A6    0
-B6    1
-C6    2
-'''.strip())]
-
-        publish_mock.call_args_list = []
-
-        self.collector.collect()
-
-        self.assertEqual(len(publish_mock.call_args_list), 2)
-        self.assertEqual(len(publish_mock.call_args_list), 4)
-
-        metrics = {
-            'A': 0,
-            'C': 2,
-            'A6': 0,
-            'C6': 2
-        }
-
-        self.assertPublishedMany(publish_mock, metrics)
-
-    @patch('diamond.collector.Collector.publish')
-    def test_should_work_with_real_data(self, publish_mock):
-        self.setUp(['InDiscards', 'InReceives', 'OutDiscards', 'OutRequests'])
-        self.setUp(['InDiscards', 'InReceives', 'OutDiscards', 'OutRequests',
-                    'Ip6InDiscards', 'Ip6InReceives', 'Ip6OutDiscards',
-                    'Ip6OutRequests'])
-
-        IPCollector.PROC = [self.getFixturePath('proc_net_snmp_1')]
-        IPCollector.PROC6 = [self.getFixturePath('proc_net_snmp6_1')]
-        self.collector.collect()
-        self.assertPublishedMany(publish_mock, {})
-
-        IPCollector.PROC = [self.getFixturePath('proc_net_snmp_2')]
-        IPCollector.PROC6 = [self.getFixturePath('proc_net_snmp6_2')]
-        self.collector.collect()
-
-        metrics = {
-            'InDiscards': 0,
-            'InReceives': 2,
-            'OutDiscards': 0,
-            'OutRequests': 1,
-            'Ip6InReceives': 2,
-            'Ip6InDiscards': 0,
-            'Ip6OutDiscards': 4,
-            'Ip6OutRequests': 1
-        }
-
-        self.assertPublishedMany(publish_mock, metrics)
-@@ -121,12 +146,16 @@ def test_should_work_with_all_data(self, publish_mock):
-        IPCollector.PROC = [
-            self.getFixturePath('proc_net_snmp_1'),
-        ]
-        IPCollector.PROC6 = [self.getFixturePath('proc_net_snmp6_1')]
-        self.collector.collect()
-        self.assertPublishedMany(publish_mock, {})
-
-        IPCollector.PROC = [
-            self.getFixturePath('proc_net_snmp_2'),
-        ]
-        IPCollector.PROC6 = [self.getFixturePath('proc_net_snmp6_1')]
-        self.collector.collect()
-
-        self.setDocExample(collector=self.collector.__class__.__name__,
+Ip6InReceives                    107795247
+Ip6InHdrErrors                    13
+Ip6InTooBigErrors                 0
+Ip6InNoRoutes                     0
+Ip6InAddrErrors                   0
+Ip6InUnknownProtos                0
+Ip6InTruncatedPkts                0
+Ip6InDiscards                     0
+Ip6InDelivers                     106562106
+Ip6OutForwDatagrams               852
+Ip6OutRequests                    106362740
+Ip6OutDiscards                    8
+Ip6OutNoRoutes                    222
+Ip6ReasmTimeout                   0
+Ip6ReasmReqds                     0
+Ip6ReasmOKs                       0
+Ip6ReasmFails                     0
+Ip6FragOKs                        0
+Ip6FragFails                      0
+Ip6FragCreates                    0
+Ip6InMcastPkts                    1271222
+Ip6OutMcastPkts                   218
+Ip6InOctets                       20710203098
+Ip6OutOctets                      17738992420
+Ip6InMcastOctets                  177916937
+Ip6OutMcastOctets                 16376
+Ip6InBcastOctets                  0
+Ip6OutBcastOctets                 0
+Ip6InNoECTPkts                    109368911
+Ip6InECT1Pkts                     0
+Ip6InECT0Pkts                     0
+Ip6InCEPkts                       0
+Icmp6InMsgs                       175895
+Icmp6InErrors                     0
+Icmp6OutMsgs                      144780
+Icmp6OutErrors                    0
+Icmp6InCsumErrors                 0
+Icmp6InDestUnreachs               40280
+Icmp6InPktTooBigs                 0
+Icmp6InTimeExcds                  0
+Icmp6InParmProblems               0
+Icmp6InEchos                      0
+Icmp6InEchoReplies                80331
+Icmp6InGroupMembQueries           38662
+Icmp6InGroupMembResponses         12
+Icmp6InGroupMembReductions        0
+Icmp6InRouterSolicits             376
+Icmp6InRouterAdvertisements       0
+Icmp6InNeighborSolicits           7838
+Icmp6InNeighborAdvertisements     8396
+Icmp6InRedirects                  0
+Icmp6InMLDv2Reports               0
+Icmp6OutDestUnreachs              40277
+Icmp6OutPktTooBigs                0
+Icmp6OutTimeExcds                 0
+Icmp6OutParmProblems              0
+Icmp6OutEchos                     88252
+Icmp6OutEchoReplies               0
+Icmp6OutGroupMembQueries          0
+Icmp6OutGroupMembResponses        12
+Icmp6OutGroupMembReductions       0
+Icmp6OutRouterSolicits            0
+Icmp6OutRouterAdvertisements      0
+Icmp6OutNeighborSolicits          8395
+Icmp6OutNeighborAdvertisements    7838
+Icmp6OutRedirects                 0
+Icmp6OutMLDv2Reports              6
+Icmp6InType1                      40280
+Icmp6InType129                    80331
+Icmp6InType130                    38662
+Icmp6InType131                    12
+Icmp6InType133                    376
+Icmp6InType135                    7838
+Icmp6InType136                    8396
+Icmp6OutType1                     40277
+Icmp6OutType128                   88252
+Icmp6OutType131                   12
+Icmp6OutType135                   8395
+Icmp6OutType136                   7838
+Icmp6OutType143                   6
+Udp6InDatagrams                   1746498
+Udp6NoPorts                       40277
+Udp6InErrors                      0
+Udp6OutDatagrams                  1786775
+Udp6RcvbufErrors                  0
+Udp6SndbufErrors                  0
+Udp6InCsumErrors                  0
+UdpLite6InDatagrams               0
+UdpLite6NoPorts                   0
+UdpLite6InErrors                  0
+UdpLite6OutDatagrams              0
+UdpLite6RcvbufErrors              0
+UdpLite6SndbufErrors              0
+UdpLite6InCsumErrors              0
